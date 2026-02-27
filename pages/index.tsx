@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import Link from 'next/link';
 import { SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
@@ -12,7 +12,7 @@ export default function Home() {
           <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
             MediNotes Pro
           </h1>
-          <div>
+          <div className="flex items-center gap-4">
             <SignedOut>
               <SignInButton mode="modal">
                 <button className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors">
@@ -20,16 +20,15 @@ export default function Home() {
                 </button>
               </SignInButton>
             </SignedOut>
+
             <SignedIn>
-              <div className="flex items-center gap-4">
-                <Link 
-                  href="/product" 
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors"
-                >
-                  Go to App
-                </Link>
-                <UserButton showName={true} />
-              </div>
+              <Link
+                href="/product"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors"
+              >
+                Go to App
+              </Link>
+              <UserButton showName={true} />
             </SignedIn>
           </div>
         </nav>
@@ -57,6 +56,7 @@ export default function Home() {
                 </p>
               </div>
             </div>
+
             <div className="relative group">
               <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 to-green-600 rounded-xl blur opacity-25 group-hover:opacity-40 transition duration-300"></div>
               <div className="relative bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 backdrop-blur-sm">
@@ -67,6 +67,7 @@ export default function Home() {
                 </p>
               </div>
             </div>
+
             <div className="relative group">
               <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl blur opacity-25 group-hover:opacity-40 transition duration-300"></div>
               <div className="relative bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 backdrop-blur-sm">
@@ -78,7 +79,7 @@ export default function Home() {
               </div>
             </div>
           </div>
-          
+
           <SignedOut>
             <SignInButton mode="modal">
               <button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition-all transform hover:scale-105">
@@ -86,6 +87,7 @@ export default function Home() {
               </button>
             </SignInButton>
           </SignedOut>
+
           <SignedIn>
             <Link href="/product">
               <button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition-all transform hover:scale-105">
@@ -103,3 +105,4 @@ export default function Home() {
     </main>
   );
 }
+

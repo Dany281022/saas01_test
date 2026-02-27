@@ -5,10 +5,7 @@ export default function Document() {
     <Html lang="en">
       <Head>
         <title>Healthcare Consultation Assistant</title>
-        <meta
-          name="description"
-          content="AI-powered medical consultation summaries"
-        />
+        <meta name="description" content="AI-powered medical consultation summaries" />
       </Head>
       <body>
         <Main />

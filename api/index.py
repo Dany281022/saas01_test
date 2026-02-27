@@ -1,103 +1,82 @@
-# api/consultation.py
 import os
-from fastapi import FastAPI, Depends, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from fastapi_clerk_auth import ClerkConfig, ClerkHTTPBearer, HTTPAuthorizationCredentials
-from openai import OpenAI
+from fastapi import FastAPI, Depends  # type: ignore
+from fastapi.responses import StreamingResponse  # type: ignore
+from pydantic import BaseModel  # type: ignore
+from fastapi_clerk_auth import (
+    ClerkConfig,
+    ClerkHTTPBearer,
+    HTTPAuthorizationCredentials,
+)  # type: ignore
+from openai import OpenAI  # type: ignore
 
-app = FastAPI(title="MediNotes Consultation API")
+app = FastAPI()
 
-# -------------------------
-# CORS (autoriser le frontend Vercel)
-# -------------------------
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # remplacer "*" par ton domaine frontend pour plus de sécurité
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# -------------------------
-# Clerk Auth
-# -------------------------
+# ---------- Clerk Auth ----------
+# Assure-toi que CLERK_JWKS_URL est défini dans tes variables d'environnement
 clerk_config = ClerkConfig(jwks_url=os.getenv("CLERK_JWKS_URL"))
 clerk_guard = ClerkHTTPBearer(clerk_config)
 
-# -------------------------
-# Request Model
-# -------------------------
+# ---------- Pydantic model ----------
 class Visit(BaseModel):
     patient_name: str
-    date_of_visit: str
+    date_of_visit: str  # ex. "2026-02-27" (ISO yyyy-mm-dd)
     notes: str
 
-# -------------------------
-# System Prompt
-# -------------------------
+# ---------- System prompt : 3 sections strictes ----------
 system_prompt = """
 You are provided with notes written by a doctor from a patient's visit.
 Your job is to summarize the visit for the doctor and provide an email.
-
 Reply with exactly three sections with the headings:
-
 ### Summary of visit for the doctor's records
 ### Next steps for the doctor
 ### Draft of email to patient in patient-friendly language
 """
 
-# -------------------------
-# Prompt Builder
-# -------------------------
 def user_prompt_for(visit: Visit) -> str:
     return f"""Create the summary, next steps and draft email for:
-
 Patient Name: {visit.patient_name}
 Date of Visit: {visit.date_of_visit}
-
 Notes:
-{visit.notes}
-"""
+{visit.notes}"""
 
-# -------------------------
-# API Endpoint
-# -------------------------
-@app.post("/api/consultation")
+# ---------- Endpoint POST /api ----------
+@app.post("/api")
 def consultation_summary(
     visit: Visit,
     creds: HTTPAuthorizationCredentials = Depends(clerk_guard),
 ):
-    # Vérification Auth
-    if not creds:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    # ID Clerk disponible si besoin (audit/traçabilité)
+    user_id = creds.decoded.get("sub")  # noqa: F841
 
-    user_id = creds.decoded.get("sub", "unknown_user")
+    client = OpenAI()
 
-    # Vérification OpenAI Key
-    openai_key = os.getenv("OPENAI_API_KEY")
-    if not openai_key:
-        raise HTTPException(status_code=500, detail="OPENAI_API_KEY not set")
-
-    client = OpenAI(api_key=openai_key)
-
-    messages = [
+    prompt = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt_for(visit)},
     ]
 
-    try:
-        # Requête OpenAI
-        response = client.chat.completions.create(
-            model="gpt-5-nano",
-            messages=messages,
-        )
+    # Stream via Chat Completions
+    stream = client.chat.completions.create(
+        model="gpt-5-nano",
+        messages=prompt,
+        stream=True,
+    )
 
-        # Extraire le texte renvoyé par OpenAI
-        summary_text = ""
-        if response.choices and len(response.choices) > 0:
-            summary_text = response.choices[0].message.content
+    def event_stream():
+        for chunk in stream:
+            # Chaque chunk peut contenir un delta textuel
+            text = None
+            try:
+                text = chunk.choices[0].delta.content
+            except Exception:
+                text = None
+            if text:
+                # Découpe par lignes pour pousser progressivement côté front
+                lines = text.split("\n")
+                for line in lines[:-1]:
+                    yield f"data: {line}\n\n"
+                    yield "data:  \n"  # ligne vide => rafraîchissement
+                yield f"data: {lines[-1]}\n\n"
 
-        return {"summary": summary_text}
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"OpenAI error: {str(e)}")
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    
