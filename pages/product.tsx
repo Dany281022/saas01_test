@@ -13,13 +13,13 @@ function ConsultationForm() {
   const { getToken } = useAuth();
 
   // ----- Form state -----
-  const [patientName, setPatientName] = useState('');
+  const [patientName, setPatientName] = useState<string>('');
   const [visitDate, setVisitDate] = useState<Date | null>(new Date());
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState<string>('');
 
   // ----- Streaming state -----
-  const [output, setOutput] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [output, setOutput] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -67,7 +67,7 @@ function ConsultationForm() {
             setLoading(false);
             return;
           }
-          // On ajoute le nouveau contenu au fur et à mesure
+          // On utilise une fonction de mise à jour pour garantir que le texte s'accumule bien
           setOutput((prev) => prev + ev.data);
         },
 
@@ -148,7 +148,7 @@ function ConsultationForm() {
 
       {output && (
         <section className="mt-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 border border-gray-200 dark:border-gray-700">
-          {/* Correction ici : ajout de whitespace-pre-line */}
+          {/* whitespace-pre-line est CRUCIAL ici pour afficher les retours à la ligne de l'IA */}
           <div className="prose prose-blue dark:prose-invert max-w-none whitespace-pre-line">
             <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
               {output}
