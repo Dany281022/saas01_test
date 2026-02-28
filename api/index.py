@@ -17,17 +17,18 @@ async def generate_summary(visit: Visit, request: Request):
     prompt = f"""
     You are a professional medical scribe. Generate a report with these EXACT sections:
 
-    ### Summary of visit for the doctor's records
+    Summary of visit for the doctor's records
     Patient Name: {visit.patient_name}
     Date of Visit: {visit.date_of_visit}
     Reason for Visit: [Briefly state the reason]
     Key Observations: [Summary of clinical findings]
 
-    ### Next steps for the doctor
+    Next steps for the doctor
     1. [Action 1]
     2. [Action 2]
+    3. [Action 3]
 
-    ### Draft of email to patient in patient-friendly language
+    Draft of email to patient in patient-friendly language
     Dear {visit.patient_name},
     [Paragraph 1: Summary of visit]
 
