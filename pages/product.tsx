@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState } from 'react';
-import { useAuth, UserButton } from '@clerk/nextjs';
+import { useAuth, Protect, UserButton, PricingTable } from '@clerk/nextjs';
 import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css"; // ✅ Import des styles
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -10,9 +11,13 @@ import { fetchEventSource } from '@microsoft/fetch-event-source';
 
 function ConsultationForm() {
   const { getToken } = useAuth();
+
+  // ----- Form state -----
   const [patientName, setPatientName] = useState('');
   const [visitDate, setVisitDate] = useState<Date | null>(new Date());
   const [notes, setNotes] = useState('');
+
+  // ----- Streaming state -----
   const [output, setOutput] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -39,30 +44,45 @@ function ConsultationForm() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${jwt}`,
+          'Authorization': `Bearer ${jwt}`,
+          'Accept': 'text/event-stream',
         },
         body: JSON.stringify({
           patient_name: patientName,
           date_of_visit: visitDate?.toISOString().slice(0, 10),
-          notes,
+          notes: notes,
         }),
+
+        onopen: async (resp) => {
+          if (resp.ok && resp.headers.get('content-type')?.includes('text/event-stream')) {
+            return; 
+          } else if (resp.status === 422) {
+             throw new Error("Validation Error: Check if all fields are filled correctly.");
+          } else {
+            throw new Error(`Server error: ${resp.status}`);
+          }
+        },
+
         onmessage(ev) {
-          buffer += ev.data;
+          const content = ev.data;
+          buffer += content;
           setOutput(buffer);
         },
+
         onclose() {
           setLoading(false);
         },
+
         onerror(err) {
           console.error('SSE error:', err);
-          controller.abort();
+          setErrorMsg('Streaming error. Verify your OpenAI API Key in Vercel settings.');
           setLoading(false);
-          setErrorMsg('Streaming error. Please try again.');
+          throw err;
         },
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setErrorMsg('Unexpected error. Check console.');
+      setErrorMsg(err.message || 'Unexpected error. Check console.');
       setLoading(false);
     }
   }
@@ -73,70 +93,60 @@ function ConsultationForm() {
         Consultation Notes
       </h1>
 
-      <form onSubmit={handleSubmit} className="space-y-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8">
+      <form onSubmit={handleSubmit} className="space-y-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 border border-gray-200 dark:border-gray-700">
         <div className="space-y-2">
-          <label htmlFor="patient" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Patient Name
-          </label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Patient Name</label>
           <input
-            id="patient"
             type="text"
             required
             value={patientName}
             onChange={(e) => setPatientName(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
             placeholder="Enter patient's full name"
           />
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="date" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Date of Visit
-          </label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Date of Visit</label>
           <DatePicker
-            id="date"
             selected={visitDate}
-            onChange={(d: Date | null) => setVisitDate(d)}
+            onChange={(d: Date | null) => setVisitDate(d)} // ✅ FIX: Ajout du type Date | null
             dateFormat="yyyy-MM-dd"
-            placeholderText="Select date"
             required
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
           />
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="notes" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Consultation Notes
-          </label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Consultation Notes</label>
           <textarea
-            id="notes"
             required
             rows={8}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-            placeholder="Enter detailed consultation notes..."
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
+            placeholder="Type clinical notes here..."
           />
         </div>
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
+          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold py-3 px-6 rounded-lg transition-all"
         >
-          {loading ? 'Generating Summary...' : 'Generate Summary'}
+          {loading ? 'Generating Summary...' : 'Generate AI Summary'}
         </button>
       </form>
 
       {errorMsg && (
-        <div className="mt-4 rounded-lg bg-red-100 text-red-800 p-4">
+        <div className="mt-4 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 rounded">
           {errorMsg}
         </div>
       )}
 
       {output && (
-        <section className="mt-8 bg-gray-50 dark:bg-gray-800 rounded-xl shadow-lg p-8">
-          <div className="markdown-content prose prose-blue dark:prose-invert max-w-none">
+        <section className="mt-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 border border-gray-200 dark:border-gray-700">
+          <div className="prose prose-blue dark:prose-invert max-w-none">
             <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
               {output}
             </ReactMarkdown>
@@ -149,14 +159,24 @@ function ConsultationForm() {
 
 export default function Product() {
   return (
-    <main className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-      {/* User Menu in Top Right */}
+    <main className="min-h-screen bg-gray-50 dark:bg-gray-900 pt-16">
       <div className="absolute top-4 right-4">
         <UserButton showName={true} />
       </div>
 
-      {/* Sans <Protect>: on affiche directement le formulaire */}
-      <ConsultationForm />
+      <Protect
+        fallback={
+          <div className="container mx-auto px-4 py-20 text-center">
+            <h1 className="text-4xl font-bold mb-6">Upgrade to Premium</h1>
+            <p className="text-gray-600 mb-12">You need a healthcare professional plan to access this tool.</p>
+            <div className="max-w-4xl mx-auto">
+              <PricingTable />
+            </div>
+          </div>
+        }
+      >
+        <ConsultationForm />
+      </Protect>
     </main>
   );
 }

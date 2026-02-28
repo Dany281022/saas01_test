@@ -1,82 +1,23 @@
-import os
-from fastapi import FastAPI, Depends  # type: ignore
-from fastapi.responses import StreamingResponse  # type: ignore
-from pydantic import BaseModel  # type: ignore
-from fastapi_clerk_auth import (
-    ClerkConfig,
-    ClerkHTTPBearer,
-    HTTPAuthorizationCredentials,
-)  # type: ignore
-from openai import OpenAI  # type: ignore
+from fastapi import FastAPI, Request
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+# ... tes autres imports (openai, clerk, etc.)
 
 app = FastAPI()
 
-# ---------- Clerk Auth ----------
-# Assure-toi que CLERK_JWKS_URL est défini dans tes variables d'environnement
-clerk_config = ClerkConfig(jwks_url=os.getenv("CLERK_JWKS_URL"))
-clerk_guard = ClerkHTTPBearer(clerk_config)
-
-# ---------- Pydantic model ----------
+# Définition de l'objet Visit pour Pydantic (Step 2 du doc)
 class Visit(BaseModel):
     patient_name: str
-    date_of_visit: str  # ex. "2026-02-27" (ISO yyyy-mm-dd)
+    date_of_visit: str
     notes: str
 
-# ---------- System prompt : 3 sections strictes ----------
-system_prompt = """
-You are provided with notes written by a doctor from a patient's visit.
-Your job is to summarize the visit for the doctor and provide an email.
-Reply with exactly three sections with the headings:
-### Summary of visit for the doctor's records
-### Next steps for the doctor
-### Draft of email to patient in patient-friendly language
-"""
+@app.post("/api") # <--- DOIT ÊTRE @app.post
+async def generate_summary(visit: Visit, request: Request):
+    # Ton code pour appeler OpenAI ici...
+    # Utilise visit.patient_name, visit.notes, etc.
+    pass
 
-def user_prompt_for(visit: Visit) -> str:
-    return f"""Create the summary, next steps and draft email for:
-Patient Name: {visit.patient_name}
-Date of Visit: {visit.date_of_visit}
-Notes:
-{visit.notes}"""
-
-# ---------- Endpoint POST /api ----------
-@app.post("/api")
-def consultation_summary(
-    visit: Visit,
-    creds: HTTPAuthorizationCredentials = Depends(clerk_guard),
-):
-    # ID Clerk disponible si besoin (audit/traçabilité)
-    user_id = creds.decoded.get("sub")  # noqa: F841
-
-    client = OpenAI()
-
-    prompt = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt_for(visit)},
-    ]
-
-    # Stream via Chat Completions
-    stream = client.chat.completions.create(
-        model="gpt-5-nano",
-        messages=prompt,
-        stream=True,
-    )
-
-    def event_stream():
-        for chunk in stream:
-            # Chaque chunk peut contenir un delta textuel
-            text = None
-            try:
-                text = chunk.choices[0].delta.content
-            except Exception:
-                text = None
-            if text:
-                # Découpe par lignes pour pousser progressivement côté front
-                lines = text.split("\n")
-                for line in lines[:-1]:
-                    yield f"data: {line}\n\n"
-                    yield "data:  \n"  # ligne vide => rafraîchissement
-                yield f"data: {lines[-1]}\n\n"
-
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
-    
+# Optionnel : pour tester si l'API répond
+@app.get("/api/hello")
+async def hello():
+    return {"message": "Hello from FastAPI"}
