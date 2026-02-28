@@ -14,21 +14,32 @@ class Visit(BaseModel):
 
 @app.post("/api")
 async def generate_summary(visit: Visit, request: Request):
+    # Prompt optimisé pour l'espacement et les titres en gras
     prompt = f"""
-    Create a professional medical report and a patient email for:
+    Create a professional medical report. Use the exact headings below.
+    
+    ### Summary of visit for the doctor's records
     Patient Name: {visit.patient_name}
     Date of Visit: {visit.date_of_visit}
-    Notes: {visit.notes}
-
-    STRUCTURE YOUR RESPONSE WITH THESE EXACT HEADERS:
-    ### Summary of visit for the doctor's records
-    (Include: Patient Name, Date of Visit, Reason for Visit, and Key Observations)
+    Reason for Visit: [Extract reason]
+    Key Observations: [Extract observations]
 
     ### Next steps for the doctor
-    (Provide a numbered list: 1., 2., 3.)
+    1. [Action 1]
+    2. [Action 2]
 
     ### Draft of email to patient in patient-friendly language
-    (Include a warm greeting, summary, and sign-off with 'Take care,', '[Doctor's Name]', and '[Doctor's Contact Information]')
+    Dear {visit.patient_name},
+    [Paragraph 1]
+
+    [Paragraph 2]
+
+    Take care,
+    [Doctor's Name]
+    [Doctor's Contact Information]
+
+    NOTES TO PROCESS:
+    {visit.notes}
     """
 
     async def event_generator():
@@ -38,7 +49,7 @@ async def generate_summary(visit: Visit, request: Request):
                 messages=[
                     {
                         "role": "system", 
-                        "content": "You are a professional medical scribe. You must use clear line breaks. Ensure list items and email signatures (Take care) are on new lines."
+                        "content": "You are a medical scribe. Return ONLY the requested sections. Use double newlines (\\n\\n) between sections and paragraphs. Do not use bold (**) for the main ### headings."
                     },
                     {"role": "user", "content": prompt}
                 ],
@@ -48,7 +59,7 @@ async def generate_summary(visit: Visit, request: Request):
             for chunk in response:
                 if chunk.choices[0].delta.content:
                     text = chunk.choices[0].delta.content
-                    # Logique du prof : on découpe pour stabiliser le flux
+                    # Logique du prof : split par ligne pour préserver les sauts de ligne
                     lines = text.split("\n")
                     for line in lines[:-1]:
                         yield f"data: {line}\n\n"
