@@ -12,51 +12,60 @@ class Visit(BaseModel):
     date_of_visit: str
     notes: str
 
+
 @app.post("/api")
 async def generate_summary(visit: Visit, request: Request):
+
     prompt = f"""
-    You are a professional medical scribe. Generate a report with these EXACT sections:
+You are a professional medical scribe.
 
-    Summary of visit for the doctor's records
-    Patient Name: {visit.patient_name}
-    Date of Visit: {visit.date_of_visit}
-    Reason for Visit: [Briefly state the reason]
-    Key Observations: [Summary of clinical findings]
+Generate ONLY valid HTML with these EXACT sections using <h3>, <p>, <ol>, <li> tags.
 
-    Next steps for the doctor
-    1. [Action 1]
-    2. [Action 2]
-    3. [Action 3]
+<h3>Summary of visit for the doctor's records</h3>
+<p><strong>Patient Name:</strong> {visit.patient_name}</p>
+<p><strong>Date of Visit:</strong> {visit.date_of_visit}</p>
+<p><strong>Reason for Visit:</strong> [Briefly state the reason]</p>
+<p><strong>Key Observations:</strong> [Summary of clinical findings]</p>
 
-    Draft of email to patient in patient-friendly language
-    Dear {visit.patient_name},
-    [Paragraph 1: Summary of visit]
+<h3>Next steps for the doctor</h3>
+<ol>
+<li>[Action 1]</li>
+<li>[Action 2]</li>
+<li>[Action 3]</li>
+</ol>
 
-    [Paragraph 2: Care instructions]
+<h3>Draft of email to patient in patient-friendly language</h3>
+<p>Dear {visit.patient_name},</p>
+<p>[Paragraph 1: Summary of visit]</p>
+<p>[Paragraph 2: Care instructions]</p>
+<p>Take care,<br/>Doctor</p>
 
-    Take care,
-    [Doctor's Name]
-    [Doctor's Contact Information]
+NOTES FROM DOCTOR:
+{visit.notes}
 
-    NOTES: {visit.notes}
-    
-    IMPORTANT: No extra empty lines between Patient Name and Key Observations.
-    """
+IMPORTANT:
+- Output ONLY HTML.
+- Do NOT use ### or Markdown.
+- Do NOT add explanations.
+"""
 
     async def event_generator():
         try:
             response = client.chat.completions.create(
-                model="gpt-4o-mini", 
+                model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "You provide medical summaries. Use double newlines only between sections and paragraphs in the email."},
+                    {"role": "system", "content": "You output clean medical HTML only."},
                     {"role": "user", "content": prompt}
                 ],
                 stream=True
             )
+
             for chunk in response:
                 if chunk.choices[0].delta.content:
                     yield f"data: {chunk.choices[0].delta.content}\n\n"
+
             yield "data: [DONE]\n\n"
+
         except Exception as e:
             yield f"data: Error: {str(e)}\n\n"
 
