@@ -7,7 +7,6 @@ from openai import OpenAI
 
 app = FastAPI()
 
-# Initialisation du client OpenAI
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 class Visit(BaseModel):
@@ -17,37 +16,34 @@ class Visit(BaseModel):
 
 @app.post("/api")
 async def generate_summary(visit: Visit, request: Request):
-    # Prompt avec instructions strictes de doubles retours à la ligne (\n\n)
+    # Changement de stratégie : On demande des doubles sauts de ligne TRÈS explicites
     prompt = f"""
-    You are an expert medical assistant. Provide a summary in English.
+    You are a professional medical assistant. Summarize these notes in English.
+    Patient: {visit.patient_name}
+    Date: {visit.date_of_visit}
+    Notes: {visit.notes}
     
-    PATIENT NAME: {visit.patient_name}
-    DATE OF VISIT: {visit.date_of_visit}
-    CLINICAL NOTES: {visit.notes}
+    OUTPUT FORMAT RULES:
+    1. Start with the title: "Summary of visit for the doctor's records"
+    2. Then, leave a blank line.
+    3. Each following line MUST start with a bullet point '*' and end with TWO new line characters.
     
-    IMPORTANT: You MUST use a double line break between each item so it displays as a list.
-    Format the output EXACTLY like this:
-    
+    EXACT EXAMPLE STRUCTURE:
     Summary of visit for the doctor's records
     
     * Patient: {visit.patient_name}
     
     * Date of Visit: {visit.date_of_visit}
     
-    * Diagnosis: [Brief diagnosis]
-    
-    * Initial management plan: [Key actions]
-    
-    * Antiviral consideration: [Advice or N/A]
+    * Diagnosis: [Insert]
     """
 
     async def event_generator():
         try:
-            # Utilisation de gpt-4o-mini
             response = client.chat.completions.create(
                 model="gpt-4o-mini", 
                 messages=[
-                    {"role": "system", "content": "You are a professional medical assistant. Always use double line breaks (\\n\\n) between bullet points to ensure proper Markdown rendering."},
+                    {"role": "system", "content": "You are a medical scribe. You always separate bullet points with two new lines (\\n\\n) to ensure they display correctly in Markdown."},
                     {"role": "user", "content": prompt}
                 ],
                 stream=True
@@ -56,7 +52,7 @@ async def generate_summary(visit: Visit, request: Request):
             for chunk in response:
                 if chunk.choices[0].delta.content:
                     content = chunk.choices[0].delta.content
-                    # On envoie le contenu. SSE nécessite "data: " et "\n\n" pour séparer les messages
+                    # On s'assure que les \n ne sont pas perdus lors de l'encodage SSE
                     yield f"data: {content}\n\n"
             
             yield "data: [DONE]\n\n"
@@ -65,8 +61,4 @@ async def generate_summary(visit: Visit, request: Request):
             yield f"data: Erreur technique : {str(e)}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
-
-@app.get("/api/hello")
-async def hello():
-    return {"status": "GPT-4o-mini is ready", "key_detected": "OPENAI_API_KEY" in os.environ}
     
