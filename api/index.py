@@ -14,7 +14,7 @@ class Visit(BaseModel):
 
 @app.post("/api")
 async def generate_summary(visit: Visit, request: Request):
-    # Prompt conçu pour générer les 3 sections visibles sur tes images
+    # Prompt conçu pour reproduire exactement la structure des images
     prompt = f"""
     You are an expert medical assistant. Based on the notes below, generate a professional consultation report.
     
@@ -22,28 +22,35 @@ async def generate_summary(visit: Visit, request: Request):
     DATE: {visit.date_of_visit}
     NOTES: {visit.notes}
 
-    STRUCTURE YOUR RESPONSE EXACTLY AS FOLLOWS:
+    INSTRUCTIONS:
+    - Use clear, bold headers for each section.
+    - Provide professional clinical insights for the doctor sections.
+    - Provide a warm, patient-friendly tone for the email section.
+
+    STRUCTURE TO FOLLOW EXACTLY:
 
     Summary of visit for the doctor's records
     
     Patient Name: {visit.patient_name}
     Date of Visit: {visit.date_of_visit}
-    Reason for Visit: [Extract the main reason]
-    Key Observations: [Summary of symptoms or status]
+    Reason for Visit: [Extract or infer the reason for the visit]
+    Key Observations: [Summary of symptoms, vitals, or status provided in notes]
 
     Next steps for the doctor
     
-    1. [Clinical action item 1]
-    2. [Clinical action item 2]
-    3. [Follow-up suggestion]
+    1. [Specific clinical action 1]
+    2. [Specific clinical action 2]
+    3. [Follow-up or further testing suggestion]
 
     Draft of email to patient in patient-friendly language
     
     Dear {visit.patient_name},
-    [Write a warm, professional 2-paragraph email summarizing the visit, next steps, and encouragement.]
+    [Write 2 professional and supportive paragraphs summarizing the visit and reinforcing care instructions.]
     
     Take care,
+    
     [Doctor's Name]
+    [Doctor's Contact Information]
     """
 
     async def event_generator():
@@ -53,7 +60,7 @@ async def generate_summary(visit: Visit, request: Request):
                 messages=[
                     {
                         "role": "system", 
-                        "content": "You are a professional medical scribe. You always provide a 3-section report: Summary, Next Steps, and Patient Email. Use clear spacing and bold headers."
+                        "content": "You are a professional medical scribe. You provide structured reports with headers: Summary, Next steps, and Draft of email. Use double line breaks (\\n\\n) for clarity."
                     },
                     {"role": "user", "content": prompt}
                 ],
@@ -70,4 +77,3 @@ async def generate_summary(visit: Visit, request: Request):
             yield f"data: Error: {str(e)}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
-    
