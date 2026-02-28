@@ -26,18 +26,19 @@ function ConsultationForm() {
   // 1. LA FONCTION DE NETTOYAGE (FORMATAGE)
   const formatOutput = (text: string) => {
     return text
-      // Supprime les ### et met en gras
+      // Supprime les ### et met en gras les titres de section
       .replace(/### (Summary of visit for the doctor's records)/g, '\n\n**$1**\n\n')
       .replace(/### (Next steps for the doctor)/g, '\n\n**$1**\n\n')
       .replace(/### (Draft of email to patient in patient-friendly language)/g, '\n\n**$1**\n\n')
       
-      // Force le gras sur les labels
+      // Force le gras sur les labels de données
       .replace(/(Patient Name:|Date of Visit:|Reason for Visit:|Key Observations:)/g, '\n**$1**')
       
-      // FIX POUR L'ALIGNEMENT : Supprime le retour à la ligne après "1." ou "2."
+      // FIX ALIGNEMENT : Supprime les sauts de ligne après "1." ou "2." et met le chiffre en gras
       .replace(/(\d\.)\s*\n+/g, '$1 ')
+      .replace(/(\d\.)\s+/g, '\n**$1** ')
       
-      // Espacement email
+      // Espacement email (nouveaux paragraphes)
       .replace(/\. ([A-Z])/g, '.\n\n$1')
       
       // Signature verticale
@@ -105,16 +106,12 @@ function ConsultationForm() {
             <ReactMarkdown 
               remarkPlugins={[remarkGfm]}
               components={{
-                // 2. LES COMPOSANTS DE STYLE
+                // Titres de section en bleu
                 h3: ({...props}) => <h3 className="text-2xl font-bold text-blue-600 border-b pb-2 mb-6 mt-8" {...props} />,
                 
-                // Style des listes (ol et li) pour que le texte soit devant le chiffre
-                ol: ({...props}) => <ol className="list-decimal ml-6 space-y-2 mb-4" {...props} />,
-                li: ({...props}) => (
-                  <li className="text-gray-700 text-lg leading-relaxed">
-                    <span className="inline">{props.children}</span>
-                  </li>
-                ),
+                // FIX FINAL : On traite ol et li comme des div pour empêcher le saut de ligne forcé
+                ol: ({children}) => <div className="space-y-2 mb-4 mt-2">{children}</div>,
+                li: ({children}) => <div className="text-gray-800 text-lg leading-relaxed">{children}</div>,
                 
                 p: ({...props}) => <p className="text-gray-800 leading-relaxed mb-4 text-lg" {...props} />,
                 strong: ({...props}) => <strong className="text-gray-900 font-bold" {...props} />,
