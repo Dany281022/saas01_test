@@ -17,7 +17,7 @@ class Visit(BaseModel):
 
 @app.post("/api")
 async def generate_summary(visit: Visit, request: Request):
-    # Prompt ajusté pour correspondre EXACTEMENT à ton image (Anglais + Listes à puces)
+    # Prompt optimisé pour gpt-4o-mini avec instructions de saut de ligne
     prompt = f"""
     You are an expert medical assistant. Analyze the following notes and provide a summary in English.
     
@@ -25,23 +25,25 @@ async def generate_summary(visit: Visit, request: Request):
     DATE OF VISIT: {visit.date_of_visit}
     CLINICAL NOTES: {visit.notes}
     
-    Format the output EXACTLY like this (using bullet points):
+    IMPORTANT: Provide the output with clear line breaks so it is easy to read.
+    Format the output EXACTLY like this:
     
     Summary of visit for the doctor's records
-    * Patient: [Patient Name]
-    * Date of Visit: [Date]
-    * Diagnosis: [Brief diagnosis based on notes]
-    * Initial management plan: [Key actions or treatments]
-    * Antiviral consideration: [Specific advice if applicable, or state if not needed]
+    
+    * Patient: {visit.patient_name}
+    * Date of Visit: {visit.date_of_visit}
+    * Diagnosis: [Brief diagnosis]
+    * Initial management plan: [Key actions]
+    * Antiviral consideration: [Advice or N/A]
     """
 
     async def event_generator():
         try:
-            # Appel en streaming à OpenAI
+            # Utilisation de gpt-4o-mini
             response = client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4o-mini", 
                 messages=[
-                    {"role": "system", "content": "You are a professional medical assistant who summarizes notes in English."},
+                    {"role": "system", "content": "You are a professional medical assistant. Use bullet points and clear spacing."},
                     {"role": "user", "content": prompt}
                 ],
                 stream=True
@@ -50,7 +52,7 @@ async def generate_summary(visit: Visit, request: Request):
             for chunk in response:
                 if chunk.choices[0].delta.content:
                     content = chunk.choices[0].delta.content
-                    # Format Standard SSE
+                    # On envoie le contenu tel quel, le frontend doit gérer le style
                     yield f"data: {content}\n\n"
             
             yield "data: [DONE]\n\n"
@@ -60,11 +62,7 @@ async def generate_summary(visit: Visit, request: Request):
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
-# Route de test
 @app.get("/api/hello")
 async def hello():
-    return {
-        "status": "Le backend Python fonctionne !", 
-        "key_detected": "OPENAI_API_KEY" in os.environ
-    }
+    return {"status": "GPT-4o-mini is ready", "key_detected": "OPENAI_API_KEY" in os.environ}
     
