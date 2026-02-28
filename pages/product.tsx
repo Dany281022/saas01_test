@@ -22,10 +22,12 @@ function ConsultationForm() {
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Fonction pour forcer le formatage des listes si l'IA envoie tout en un bloc
+  // Fonction améliorée pour garantir que le Markdown est bien interprété
   const formatOutput = (text: string) => {
-    // Ajoute un saut de ligne avant chaque puce si ce n'est pas déjà le cas
-    return text.replace(/\*/g, '\n*');
+    return text
+      .replace(/\*/g, '\n*')          // Sauts de ligne avant puces
+      .replace(/(\d\.)/g, '\n$1')      // Sauts de ligne avant listes numérotées (Next Steps)
+      .replace(/^(Summary|Next steps|Draft of email)/gm, '\n### $1'); // Transforme les titres en headers Markdown
   };
 
   async function handleSubmit(e: React.FormEvent) {
@@ -73,7 +75,6 @@ function ConsultationForm() {
             setLoading(false);
             return;
           }
-          // On accumule le texte brut
           setOutput((prev) => prev + ev.data);
         },
 
@@ -97,7 +98,7 @@ function ConsultationForm() {
 
   return (
     <div className="container mx-auto px-4 py-12 max-w-3xl">
-      <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-8">
+      <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-8 text-center">
         Consultation Notes
       </h1>
 
@@ -142,25 +143,30 @@ function ConsultationForm() {
           disabled={loading}
           className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold py-3 px-6 rounded-lg transition-all shadow-md active:scale-95"
         >
-          {loading ? 'Generating Summary...' : 'Generate AI Summary'}
+          {loading ? 'Generating Summary...' : 'Generate Summary'}
         </button>
       </form>
 
       {errorMsg && (
-        <div className="mt-4 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 rounded">
+        <div className="mt-4 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 rounded text-center">
           {errorMsg}
         </div>
       )}
 
       {output && (
-        <section className="mt-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 border border-gray-200 dark:border-gray-700">
-          <div className="prose prose-blue dark:prose-invert max-w-none">
-            {/* Le style whiteSpace: 'pre-wrap' est injecté directement pour forcer les sauts de ligne */}
-            <div style={{ whiteSpace: 'pre-wrap' }} className="text-gray-800 dark:text-gray-200">
-              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
-                {formatOutput(output)}
-              </ReactMarkdown>
-            </div>
+        <section className="mt-8 bg-white dark:bg-gray-800 rounded-xl shadow-xl p-10 border border-gray-200 dark:border-gray-700 animate-in fade-in duration-500">
+          <div className="prose prose-slate dark:prose-invert max-w-none">
+            <ReactMarkdown 
+              remarkPlugins={[remarkGfm, remarkBreaks]}
+              components={{
+                // Styling des titres pour correspondre aux images (Gras et espacé)
+                h3: ({node, ...props}) => <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-4 border-b pb-2" {...props} />,
+                p: ({node, ...props}) => <p className="text-gray-700 dark:text-gray-300 leading-relaxed mb-4" {...props} />,
+                li: ({node, ...props}) => <li className="ml-4 mb-2 text-gray-700 dark:text-gray-300" {...props} />,
+              }}
+            >
+              {formatOutput(output)}
+            </ReactMarkdown>
           </div>
         </section>
       )}
