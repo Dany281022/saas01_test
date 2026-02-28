@@ -22,6 +22,12 @@ function ConsultationForm() {
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Fonction pour forcer le formatage des listes si l'IA envoie tout en un bloc
+  const formatOutput = (text: string) => {
+    // Ajoute un saut de ligne avant chaque puce si ce n'est pas déjà le cas
+    return text.replace(/\*/g, '\n*');
+  };
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setOutput('');
@@ -67,7 +73,7 @@ function ConsultationForm() {
             setLoading(false);
             return;
           }
-          // On utilise une fonction de mise à jour pour garantir que le texte s'accumule bien
+          // On accumule le texte brut
           setOutput((prev) => prev + ev.data);
         },
 
@@ -77,14 +83,14 @@ function ConsultationForm() {
 
         onerror(err) {
           console.error('SSE error:', err);
-          setErrorMsg('Streaming error. Verify your OpenAI API Key in Vercel settings.');
+          setErrorMsg('Streaming error. Verify your OpenAI API Key.');
           setLoading(false);
           throw err;
         },
       });
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || 'Unexpected error. Check console.');
+      setErrorMsg(err.message || 'Unexpected error.');
       setLoading(false);
     }
   }
@@ -103,7 +109,7 @@ function ConsultationForm() {
             required
             value={patientName}
             onChange={(e) => setPatientName(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="Enter patient's full name"
           />
         </div>
@@ -115,7 +121,7 @@ function ConsultationForm() {
             onChange={(d: Date | null) => setVisitDate(d)}
             dateFormat="yyyy-MM-dd"
             required
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
@@ -126,7 +132,7 @@ function ConsultationForm() {
             rows={8}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="Type clinical notes here..."
           />
         </div>
@@ -134,7 +140,7 @@ function ConsultationForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold py-3 px-6 rounded-lg transition-all"
+          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold py-3 px-6 rounded-lg transition-all shadow-md active:scale-95"
         >
           {loading ? 'Generating Summary...' : 'Generate AI Summary'}
         </button>
@@ -148,11 +154,13 @@ function ConsultationForm() {
 
       {output && (
         <section className="mt-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 border border-gray-200 dark:border-gray-700">
-          {/* whitespace-pre-line est CRUCIAL ici pour afficher les retours à la ligne de l'IA */}
-          <div className="prose prose-blue dark:prose-invert max-w-none whitespace-pre-line">
-            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
-              {output}
-            </ReactMarkdown>
+          <div className="prose prose-blue dark:prose-invert max-w-none">
+            {/* Le style whiteSpace: 'pre-wrap' est injecté directement pour forcer les sauts de ligne */}
+            <div style={{ whiteSpace: 'pre-wrap' }} className="text-gray-800 dark:text-gray-200">
+              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                {formatOutput(output)}
+              </ReactMarkdown>
+            </div>
           </div>
         </section>
       )}
