@@ -11,23 +11,27 @@ import { fetchEventSource } from '@microsoft/fetch-event-source';
 
 function ConsultationForm() {
   const { getToken } = useAuth();
-
-  // ----- Form state -----
   const [patientName, setPatientName] = useState<string>('');
   const [visitDate, setVisitDate] = useState<Date | null>(new Date());
   const [notes, setNotes] = useState<string>('');
-
-  // ----- Streaming state -----
   const [output, setOutput] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Fonction améliorée pour garantir que le Markdown est bien interprété
+  // CETTE FONCTION EST LA CLÉ : Elle nettoie les "*" et crée les titres
   const formatOutput = (text: string) => {
     return text
-      .replace(/\*/g, '\n*')          // Sauts de ligne avant puces
-      .replace(/(\d\.)/g, '\n$1')      // Sauts de ligne avant listes numérotées (Next Steps)
-      .replace(/^(Summary|Next steps|Draft of email)/gm, '\n### $1'); // Transforme les titres en headers Markdown
+      // 1. Supprime les astérisques seuls sur une ligne
+      .replace(/^\s*\*\s*$/gm, '')
+      // 2. Transforme les titres principaux en Headers Markdown (###)
+      .replace(/\*?(Summary of visit for the doctor's records)\*?/g, '\n### $1\n')
+      .replace(/\*?(Next steps for the doctor)\*?/g, '\n### $1\n')
+      .replace(/\*?(Draft of email to patient in patient-friendly language)\*?/g, '\n### $1\n')
+      // 3. Assure que "Patient Name:", "Date of Visit:", etc. sont sur de nouvelles lignes
+      .replace(/(Patient Name:|Date of Visit:|Reason for Visit:|Key Observations:)/g, '\n**$1**')
+      // 4. Nettoie les doubles astérisques restants
+      .replace(/\*\*/g, '') 
+      .trim();
   };
 
   async function handleSubmit(e: React.FormEvent) {
@@ -44,10 +48,7 @@ function ConsultationForm() {
         return;
       }
 
-      const controller = new AbortController();
-
       await fetchEventSource('/api', {
-        signal: controller.signal,
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -59,17 +60,6 @@ function ConsultationForm() {
           date_of_visit: visitDate?.toISOString().slice(0, 10),
           notes: notes,
         }),
-
-        onopen: async (resp) => {
-          if (resp.ok && resp.headers.get('content-type')?.includes('text/event-stream')) {
-            return; 
-          } else if (resp.status === 422) {
-             throw new Error("Validation Error: Check if all fields are filled correctly.");
-          } else {
-            throw new Error(`Server error: ${resp.status}`);
-          }
-        },
-
         onmessage(ev) {
           if (ev.data === "[DONE]") {
             setLoading(false);
@@ -77,21 +67,15 @@ function ConsultationForm() {
           }
           setOutput((prev) => prev + ev.data);
         },
-
-        onclose() {
-          setLoading(false);
-        },
-
+        onclose() { setLoading(false); },
         onerror(err) {
-          console.error('SSE error:', err);
-          setErrorMsg('Streaming error. Verify your OpenAI API Key.');
+          setErrorMsg('Streaming error. Verify API Key.');
           setLoading(false);
           throw err;
         },
       });
     } catch (err: any) {
-      console.error(err);
-      setErrorMsg(err.message || 'Unexpected error.');
+      setErrorMsg(err.message || 'Error occurred.');
       setLoading(false);
     }
   }
@@ -105,68 +89,36 @@ function ConsultationForm() {
       <form onSubmit={handleSubmit} className="space-y-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 border border-gray-200 dark:border-gray-700">
         <div className="space-y-2">
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Patient Name</label>
-          <input
-            type="text"
-            required
-            value={patientName}
-            onChange={(e) => setPatientName(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Enter patient's full name"
-          />
+          <input type="text" required value={patientName} onChange={(e) => setPatientName(e.target.value)} className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
-
         <div className="space-y-2">
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Date of Visit</label>
-          <DatePicker
-            selected={visitDate}
-            onChange={(d: Date | null) => setVisitDate(d)}
-            dateFormat="yyyy-MM-dd"
-            required
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-          />
+          <DatePicker selected={visitDate} onChange={(d: Date | null) => setVisitDate(d)} dateFormat="yyyy-MM-dd" required className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
-
         <div className="space-y-2">
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Consultation Notes</label>
-          <textarea
-            required
-            rows={8}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Type clinical notes here..."
-          />
+          <textarea required rows={6} value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" placeholder="Type clinical notes here..." />
         </div>
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold py-3 px-6 rounded-lg transition-all shadow-md active:scale-95"
-        >
-          {loading ? 'Generating Summary...' : 'Generate Summary'}
+        <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all active:scale-95">
+          {loading ? 'Generating...' : 'Generate Summary'}
         </button>
       </form>
 
-      {errorMsg && (
-        <div className="mt-4 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 rounded text-center">
-          {errorMsg}
-        </div>
-      )}
-
       {output && (
-        <section className="mt-8 bg-white dark:bg-gray-800 rounded-xl shadow-xl p-10 border border-gray-200 dark:border-gray-700 animate-in fade-in duration-500">
+        <section className="mt-8 bg-white dark:bg-gray-900 rounded-xl shadow-2xl p-10 border border-gray-200 dark:border-gray-700">
           <div className="prose prose-slate dark:prose-invert max-w-none">
-            <ReactMarkdown 
-              remarkPlugins={[remarkGfm, remarkBreaks]}
-              components={{
-                // Styling des titres pour correspondre aux images (Gras et espacé)
-                h3: ({node, ...props}) => <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-4 border-b pb-2" {...props} />,
-                p: ({node, ...props}) => <p className="text-gray-700 dark:text-gray-300 leading-relaxed mb-4" {...props} />,
-                li: ({node, ...props}) => <li className="ml-4 mb-2 text-gray-700 dark:text-gray-300" {...props} />,
-              }}
-            >
-              {formatOutput(output)}
-            </ReactMarkdown>
+            <div style={{ whiteSpace: 'pre-wrap' }}>
+              <ReactMarkdown 
+                remarkPlugins={[remarkGfm, remarkBreaks]}
+                components={{
+                  h3: ({node, ...props}) => <h3 className="text-2xl font-extrabold text-blue-600 dark:text-blue-400 mt-10 mb-4 border-b-2 border-blue-100 pb-2" {...props} />,
+                  p: ({node, ...props}) => <p className="text-gray-800 dark:text-gray-200 leading-relaxed mb-4 text-lg" {...props} />,
+                  li: ({node, ...props}) => <li className="ml-6 mb-3 text-gray-700 dark:text-gray-300 list-disc marker:text-blue-500" {...props} />,
+                }}
+              >
+                {formatOutput(output)}
+              </ReactMarkdown>
+            </div>
           </div>
         </section>
       )}
@@ -177,21 +129,8 @@ function ConsultationForm() {
 export default function Product() {
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-900 pt-16">
-      <div className="absolute top-4 right-4">
-        <UserButton showName={true} />
-      </div>
-
-      <Protect
-        fallback={
-          <div className="container mx-auto px-4 py-20 text-center">
-            <h1 className="text-4xl font-bold mb-6">Upgrade to Premium</h1>
-            <p className="text-gray-600 mb-12">You need a healthcare professional plan to access this tool.</p>
-            <div className="max-w-4xl mx-auto">
-              <PricingTable />
-            </div>
-          </div>
-        }
-      >
+      <div className="absolute top-4 right-4"><UserButton showName={true} /></div>
+      <Protect fallback={<div className="container mx-auto px-4 py-20 text-center"><h1 className="text-4xl font-bold mb-6 text-gray-800">Access Restricted</h1><PricingTable /></div>}>
         <ConsultationForm />
       </Protect>
     </main>
