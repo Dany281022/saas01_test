@@ -1,12 +1,10 @@
 import os
-import json
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from openai import OpenAI
 
 app = FastAPI()
-
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 class Visit(BaseModel):
@@ -16,26 +14,27 @@ class Visit(BaseModel):
 
 @app.post("/api")
 async def generate_summary(visit: Visit, request: Request):
-    # Changement de stratégie : On demande des doubles sauts de ligne TRÈS explicites
+    # Prompt "verrouillé" : l'IA ne peut pas inventer de nouveaux titres
     prompt = f"""
-    You are a professional medical assistant. Summarize these notes in English.
-    Patient: {visit.patient_name}
-    Date: {visit.date_of_visit}
-    Notes: {visit.notes}
-    
-    OUTPUT FORMAT RULES:
-    1. Start with the title: "Summary of visit for the doctor's records"
-    2. Then, leave a blank line.
-    3. Each following line MUST start with a bullet point '*' and end with TWO new line characters.
-    
-    EXACT EXAMPLE STRUCTURE:
+    You are a strict medical scribe. Summarize the clinical notes using ONLY these 5 categories. 
+    If information is missing for a category, write "Not specified based on current notes".
+
+    PATIENT: {visit.patient_name}
+    DATE: {visit.date_of_visit}
+    NOTES: {visit.notes}
+
+    STRICT FORMAT TO FOLLOW:
     Summary of visit for the doctor's records
     
     * Patient: {visit.patient_name}
     
     * Date of Visit: {visit.date_of_visit}
     
-    * Diagnosis: [Insert]
+    * Diagnosis/Assessment: [Brief diagnosis or risk assessment]
+    
+    * Initial management plan: [Key actions or treatments]
+    
+    * Antiviral consideration: [Specific advice or N/A]
     """
 
     async def event_generator():
@@ -43,7 +42,10 @@ async def generate_summary(visit: Visit, request: Request):
             response = client.chat.completions.create(
                 model="gpt-4o-mini", 
                 messages=[
-                    {"role": "system", "content": "You are a medical scribe. You always separate bullet points with two new lines (\\n\\n) to ensure they display correctly in Markdown."},
+                    {
+                        "role": "system", 
+                        "content": "You are a professional medical assistant. You MUST follow the requested 5-bullet structure exactly. Never add extra sections like 'Next steps' or 'Notes reviewed'. Use double line breaks (\\n\\n)."
+                    },
                     {"role": "user", "content": prompt}
                 ],
                 stream=True
@@ -52,13 +54,10 @@ async def generate_summary(visit: Visit, request: Request):
             for chunk in response:
                 if chunk.choices[0].delta.content:
                     content = chunk.choices[0].delta.content
-                    # On s'assure que les \n ne sont pas perdus lors de l'encodage SSE
                     yield f"data: {content}\n\n"
             
             yield "data: [DONE]\n\n"
-
         except Exception as e:
-            yield f"data: Erreur technique : {str(e)}\n\n"
+            yield f"data: Error: {str(e)}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
-    
