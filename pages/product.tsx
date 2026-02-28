@@ -20,16 +20,16 @@ function ConsultationForm() {
 
   const formatOutput = (text: string) => {
     return text
-      // Force un saut de ligne avant chaque numéro de liste (1., 2., 3.)
-      .replace(/(\d\.)/g, '\n$1') 
-      // Force un saut de ligne avant les infos patient si collées
-      .replace(/(Patient Name:|Date of Visit:|Reason for Visit:|Key Observations:)/g, '\n$1')
-      // Force la signature de l'email à aller à la ligne
-      .replace(/(Take care,|Sincerely,|Best regards,)/g, '\n\n$1\n')
+      // Nettoyage des astérisques parasites au début de l'email
+      .replace(/^\s*\*+/gm, '')
+      // Force le gras sur les étiquettes de données
+      .replace(/(Patient Name:|Date of Visit:|Reason for Visit:|Key Observations:)/g, '**$1**')
+      // S'assure que les étapes (1., 2.) sont sur de nouvelles lignes
+      .replace(/(\d\.)/g, '\n$1')
+      // Force le formatage de la signature sur plusieurs lignes
+      .replace(/(Take care,)/g, '\n\n$1\n')
       .replace(/(\[Doctor's Name\])/g, '\n$1')
       .replace(/(\[Doctor's Contact Information\])/g, '\n$1')
-      // Nettoie les astérisques parasites souvent envoyés en stream
-      .replace(/^\s*\*\s*$/gm, '')
       .trim();
   };
 
@@ -96,7 +96,7 @@ function ConsultationForm() {
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Notes</label>
           <textarea required rows={6} value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" placeholder="Type notes..." />
         </div>
-        <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-all active:scale-95 shadow-md">
+        <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all active:scale-95">
           {loading ? 'Generating...' : 'Generate Summary'}
         </button>
       </form>
@@ -104,18 +104,16 @@ function ConsultationForm() {
       {output && (
         <section className="mt-8 bg-white dark:bg-gray-900 rounded-xl shadow-2xl p-10 border border-gray-200 dark:border-gray-700">
           <div className="prose prose-slate dark:prose-invert max-w-none">
-            <div style={{ whiteSpace: 'pre-wrap' }}>
-              <ReactMarkdown 
-                remarkPlugins={[remarkGfm, remarkBreaks]}
-                components={{
-                  h3: ({node, ...props}) => <h3 className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-10 mb-4 border-b pb-2" {...props} />,
-                  p: ({node, ...props}) => <p className="text-gray-800 dark:text-gray-200 leading-relaxed mb-4" {...props} />,
-                  li: ({node, ...props}) => <li className="ml-6 mb-2 text-gray-700 dark:text-gray-300 list-decimal" {...props} />,
-                }}
-              >
-                {formatOutput(output)}
-              </ReactMarkdown>
-            </div>
+            <ReactMarkdown 
+              remarkPlugins={[remarkGfm, remarkBreaks]}
+              components={{
+                h3: ({node, ...props}) => <h3 className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-10 mb-4 border-b pb-2" {...props} />,
+                p: ({node, ...props}) => <p className="text-gray-800 dark:text-gray-200 leading-tight mb-4 text-lg" {...props} />,
+                li: ({node, ...props}) => <li className="ml-6 mb-2 text-gray-700 dark:text-gray-300 list-decimal" {...props} />,
+              }}
+            >
+              {formatOutput(output)}
+            </ReactMarkdown>
           </div>
         </section>
       )}
@@ -127,7 +125,7 @@ export default function Product() {
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-900 pt-16">
       <div className="absolute top-4 right-4"><UserButton showName={true} /></div>
-      <Protect fallback={<div className="container mx-auto px-4 py-20 text-center"><h1 className="text-4xl font-bold mb-6">Upgrade to Premium</h1><PricingTable /></div>}>
+      <Protect fallback={<div className="container mx-auto px-4 py-20 text-center"><PricingTable /></div>}>
         <ConsultationForm />
       </Protect>
     </main>
