@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useAuth, Protect, UserButton, PricingTable } from '@clerk/nextjs';
 import DatePicker from 'react-datepicker';
-import "react-datepicker/dist/react-datepicker.css"; // ✅ Import des styles
+import "react-datepicker/dist/react-datepicker.css"; 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -37,7 +37,6 @@ function ConsultationForm() {
       }
 
       const controller = new AbortController();
-      let buffer = '';
 
       await fetchEventSource('/api', {
         signal: controller.signal,
@@ -64,9 +63,12 @@ function ConsultationForm() {
         },
 
         onmessage(ev) {
-          const content = ev.data;
-          buffer += content;
-          setOutput(buffer);
+          if (ev.data === "[DONE]") {
+            setLoading(false);
+            return;
+          }
+          // On ajoute le nouveau contenu au fur et à mesure
+          setOutput((prev) => prev + ev.data);
         },
 
         onclose() {
@@ -110,7 +112,7 @@ function ConsultationForm() {
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Date of Visit</label>
           <DatePicker
             selected={visitDate}
-            onChange={(d: Date | null) => setVisitDate(d)} // ✅ FIX: Ajout du type Date | null
+            onChange={(d: Date | null) => setVisitDate(d)}
             dateFormat="yyyy-MM-dd"
             required
             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
@@ -146,7 +148,8 @@ function ConsultationForm() {
 
       {output && (
         <section className="mt-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 border border-gray-200 dark:border-gray-700">
-          <div className="prose prose-blue dark:prose-invert max-w-none">
+          {/* Correction ici : ajout de whitespace-pre-line */}
+          <div className="prose prose-blue dark:prose-invert max-w-none whitespace-pre-line">
             <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
               {output}
             </ReactMarkdown>
