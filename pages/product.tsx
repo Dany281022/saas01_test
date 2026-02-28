@@ -6,110 +6,72 @@ import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css"; 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import remarkBreaks from 'remark-breaks';
 import { fetchEventSource } from '@microsoft/fetch-event-source';
 
 function ConsultationForm() {
   const { getToken } = useAuth();
-  const [patientName, setPatientName] = useState<string>('');
+  const [patientName, setPatientName] = useState('');
   const [visitDate, setVisitDate] = useState<Date | null>(new Date());
-  const [notes, setNotes] = useState<string>('');
-  const [output, setOutput] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [notes, setNotes] = useState('');
+  const [output, setOutput] = useState('');
+  const [loading, setLoading] = useState(false);
 
+  // LOGIQUE DE RÉPARATION ULTIME
   const formatOutput = (text: string) => {
     return text
-      // Nettoyage des astérisques parasites au début de l'email
-      .replace(/^\s*\*+/gm, '')
-      // Force le gras sur les étiquettes de données
-      .replace(/(Patient Name:|Date of Visit:|Reason for Visit:|Key Observations:)/g, '**$1**')
-      // S'assure que les étapes (1., 2.) sont sur de nouvelles lignes
-      .replace(/(\d\.)/g, '\n$1')
-      // Force le formatage de la signature sur plusieurs lignes
-      .replace(/(Take care,)/g, '\n\n$1\n')
-      .replace(/(\[Doctor's Name\])/g, '\n$1')
-      .replace(/(\[Doctor's Contact Information\])/g, '\n$1')
+      // Force les titres ### à être sur une nouvelle ligne avec de l'espace
+      .replace(/(### Summary|### Next|### Draft)/g, '\n\n$1')
+      // Force chaque étiquette de données à aller à la ligne et être en gras
+      .replace(/(Patient Name:|Date of Visit:|Reason for Visit:|Key Observations:)/g, '\n\n**$1**')
+      // S'assure que les signatures sont bien séparées
+      .replace(/(Take care,|Dear)/g, '\n\n$1')
       .trim();
   };
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setOutput('');
-    setErrorMsg(null);
     setLoading(true);
 
     try {
       const jwt = await getToken();
-      if (!jwt) {
-        setErrorMsg('Authentication required');
-        setLoading(false);
-        return;
-      }
-
       await fetchEventSource('/api', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${jwt}`,
-          'Accept': 'text/event-stream',
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${jwt}` },
         body: JSON.stringify({
           patient_name: patientName,
           date_of_visit: visitDate?.toISOString().slice(0, 10),
           notes: notes,
         }),
         onmessage(ev) {
-          if (ev.data === "[DONE]") {
-            setLoading(false);
-            return;
-          }
+          if (ev.data === "[DONE]") { setLoading(false); return; }
           setOutput((prev) => prev + ev.data);
         },
-        onclose() { setLoading(false); },
-        onerror(err) {
-          setErrorMsg('Streaming error.');
-          setLoading(false);
-          throw err;
-        },
       });
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Error occurred.');
-      setLoading(false);
-    }
+    } catch (err) { setLoading(false); }
   }
 
   return (
     <div className="container mx-auto px-4 py-12 max-w-3xl">
-      <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-8 text-center">Consultation Notes</h1>
-
-      <form onSubmit={handleSubmit} className="space-y-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 border border-gray-200 dark:border-gray-700">
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Patient Name</label>
-          <input type="text" required value={patientName} onChange={(e) => setPatientName(e.target.value)} className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Date of Visit</label>
-          <DatePicker selected={visitDate} onChange={(d: Date | null) => setVisitDate(d)} dateFormat="yyyy-MM-dd" required className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Notes</label>
-          <textarea required rows={6} value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" placeholder="Type notes..." />
-        </div>
-        <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all active:scale-95">
+      <h1 className="text-4xl font-bold mb-8 text-center">Consultation Notes</h1>
+      <form onSubmit={handleSubmit} className="space-y-6 bg-white p-8 rounded-xl shadow-lg border">
+        <input type="text" placeholder="Patient Name" required value={patientName} onChange={(e) => setPatientName(e.target.value)} className="w-full p-2 border rounded" />
+        <DatePicker selected={visitDate} onChange={(d) => setVisitDate(d)} className="w-full p-2 border rounded" />
+        <textarea required rows={6} value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full p-2 border rounded" placeholder="Notes..." />
+        <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg">
           {loading ? 'Generating...' : 'Generate Summary'}
         </button>
       </form>
 
       {output && (
-        <section className="mt-8 bg-white dark:bg-gray-900 rounded-xl shadow-2xl p-10 border border-gray-200 dark:border-gray-700">
-          <div className="prose prose-slate dark:prose-invert max-w-none">
+        <section className="mt-8 bg-white p-10 rounded-xl shadow-2xl border">
+          <div className="prose max-w-none">
             <ReactMarkdown 
-              remarkPlugins={[remarkGfm, remarkBreaks]}
+              remarkPlugins={[remarkGfm]}
               components={{
-                h3: ({node, ...props}) => <h3 className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-10 mb-4 border-b pb-2" {...props} />,
-                p: ({node, ...props}) => <p className="text-gray-800 dark:text-gray-200 leading-tight mb-4 text-lg" {...props} />,
-                li: ({node, ...props}) => <li className="ml-6 mb-2 text-gray-700 dark:text-gray-300 list-decimal" {...props} />,
+                h3: ({...props}) => <h3 className="text-2xl font-bold text-blue-600 border-b pb-2 mb-6" {...props} />,
+                p: ({...props}) => <p className="text-gray-800 leading-relaxed mb-4" {...props} />,
+                strong: ({...props}) => <strong className="text-blue-900 block mt-2" {...props} />, // "block" force le retour à la ligne !
               }}
             >
               {formatOutput(output)}
@@ -123,11 +85,9 @@ function ConsultationForm() {
 
 export default function Product() {
   return (
-    <main className="min-h-screen bg-gray-50 dark:bg-gray-900 pt-16">
-      <div className="absolute top-4 right-4"><UserButton showName={true} /></div>
-      <Protect fallback={<div className="container mx-auto px-4 py-20 text-center"><PricingTable /></div>}>
-        <ConsultationForm />
-      </Protect>
+    <main className="min-h-screen bg-gray-50 pt-16">
+      <div className="absolute top-4 right-4"><UserButton /></div>
+      <Protect fallback={<PricingTable />}><ConsultationForm /></Protect>
     </main>
   );
 }
