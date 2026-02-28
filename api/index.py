@@ -1,73 +1,69 @@
 import os
-from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-from openai import OpenAI
+from fastapi import FastAPI, Depends  # type: ignore
+from fastapi.responses import StreamingResponse  # type: ignore
+from pydantic import BaseModel  # type: ignore
+from fastapi_clerk_auth import ClerkConfig, ClerkHTTPBearer, HTTPAuthorizationCredentials  # type: ignore
+from openai import OpenAI  # type: ignore
 
 app = FastAPI()
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+clerk_config = ClerkConfig(jwks_url=os.getenv("CLERK_JWKS_URL"))
+clerk_guard = ClerkHTTPBearer(clerk_config)
+
 
 class Visit(BaseModel):
     patient_name: str
     date_of_visit: str
     notes: str
 
+
+system_prompt = """
+You are provided with notes written by a doctor from a patient's visit.
+Your job is to summarize the visit for the doctor and provide an email.
+Reply with exactly three sections with the headings:
+### Summary of visit for the doctor's records
+### Next steps for the doctor
+### Draft of email to patient in patient-friendly language
+"""
+
+
+def user_prompt_for(visit: Visit) -> str:
+    return f"""Create the summary, next steps and draft email for:
+Patient Name: {visit.patient_name}
+Date of Visit: {visit.date_of_visit}
+Notes:
+{visit.notes}"""
+
+
 @app.post("/api")
-async def generate_summary(visit: Visit, request: Request):
-    # Prompt optimisé pour l'espacement et les titres en gras
-    prompt = f"""
-    Create a professional medical report. Use the exact headings below.
-    
-    ### Summary of visit for the doctor's records
-    Patient Name: {visit.patient_name}
-    Date of Visit: {visit.date_of_visit}
-    Reason for Visit: [Extract reason]
-    Key Observations: [Extract observations]
+def consultation_summary(
+    visit: Visit,
+    creds: HTTPAuthorizationCredentials = Depends(clerk_guard),
+):
+    user_id = creds.decoded["sub"]  # Available for tracking/auditing
+    client = OpenAI()
 
-    ### Next steps for the doctor
-    1. [Action 1]
-    2. [Action 2]
+    user_prompt = user_prompt_for(visit)
 
-    ### Draft of email to patient in patient-friendly language
-    Dear {visit.patient_name},
-    [Paragraph 1]
+    prompt = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
 
-    [Paragraph 2]
+    stream = client.chat.completions.create(
+        model="gpt-5-nano",
+        messages=prompt,
+        stream=True,
+    )
 
-    Take care,
-    [Doctor's Name]
-    [Doctor's Contact Information]
+    def event_stream():
+        for chunk in stream:
+            text = chunk.choices[0].delta.content
+            if text:
+                lines = text.split("\n")
+                for line in lines[:-1]:
+                    yield f"data: {line}\n\n"
+                    yield "data:  \n"
+                yield f"data: {lines[-1]}\n\n"
 
-    NOTES TO PROCESS:
-    {visit.notes}
-    """
-
-    async def event_generator():
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4o-mini", 
-                messages=[
-                    {
-                        "role": "system", 
-                        "content": "You are a medical scribe. Return ONLY the requested sections. Use double newlines (\\n\\n) between sections and paragraphs. Do not use bold (**) for the main ### headings."
-                    },
-                    {"role": "user", "content": prompt}
-                ],
-                stream=True
-            )
-
-            for chunk in response:
-                if chunk.choices[0].delta.content:
-                    text = chunk.choices[0].delta.content
-                    # Logique du prof : split par ligne pour préserver les sauts de ligne
-                    lines = text.split("\n")
-                    for line in lines[:-1]:
-                        yield f"data: {line}\n\n"
-                    yield f"data: {lines[-1]}\n\n"
-            
-            yield "data: [DONE]\n\n"
-        except Exception as e:
-            yield f"data: Error: {str(e)}\n\n"
-
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
     
