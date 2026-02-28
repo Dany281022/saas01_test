@@ -17,23 +17,27 @@ class Visit(BaseModel):
 
 @app.post("/api")
 async def generate_summary(visit: Visit, request: Request):
-    # Prompt optimisé pour gpt-4o-mini avec instructions de saut de ligne
+    # Prompt avec instructions strictes de doubles retours à la ligne (\n\n)
     prompt = f"""
-    You are an expert medical assistant. Analyze the following notes and provide a summary in English.
+    You are an expert medical assistant. Provide a summary in English.
     
     PATIENT NAME: {visit.patient_name}
     DATE OF VISIT: {visit.date_of_visit}
     CLINICAL NOTES: {visit.notes}
     
-    IMPORTANT: Provide the output with clear line breaks so it is easy to read.
+    IMPORTANT: You MUST use a double line break between each item so it displays as a list.
     Format the output EXACTLY like this:
     
     Summary of visit for the doctor's records
     
     * Patient: {visit.patient_name}
+    
     * Date of Visit: {visit.date_of_visit}
+    
     * Diagnosis: [Brief diagnosis]
+    
     * Initial management plan: [Key actions]
+    
     * Antiviral consideration: [Advice or N/A]
     """
 
@@ -43,7 +47,7 @@ async def generate_summary(visit: Visit, request: Request):
             response = client.chat.completions.create(
                 model="gpt-4o-mini", 
                 messages=[
-                    {"role": "system", "content": "You are a professional medical assistant. Use bullet points and clear spacing."},
+                    {"role": "system", "content": "You are a professional medical assistant. Always use double line breaks (\\n\\n) between bullet points to ensure proper Markdown rendering."},
                     {"role": "user", "content": prompt}
                 ],
                 stream=True
@@ -52,7 +56,7 @@ async def generate_summary(visit: Visit, request: Request):
             for chunk in response:
                 if chunk.choices[0].delta.content:
                     content = chunk.choices[0].delta.content
-                    # On envoie le contenu tel quel, le frontend doit gérer le style
+                    # On envoie le contenu. SSE nécessite "data: " et "\n\n" pour séparer les messages
                     yield f"data: {content}\n\n"
             
             yield "data: [DONE]\n\n"
