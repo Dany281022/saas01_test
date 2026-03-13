@@ -12,7 +12,7 @@ class Visit(BaseModel):
     date_of_visit: str
     notes: str
 
-@app.post("/api")
+@app.post("/api/consultation")
 async def generate_summary(visit: Visit, request: Request):
     prompt = f"""
     You are a professional medical scribe. Generate a report with these EXACT sections:

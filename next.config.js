@@ -1,17 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    allowedDevOrigins: ["192.168.2.17"], // autorise accès réseau local
-  },
-
-  async rewrites() {
-    return [
-      {
-        source: "/api",
-        destination: "http://127.0.0.1:8000/api",
-      },
-    ];
-  },
+  output: 'export',    // Indique à Next.js de générer du HTML/JS pur pour AWS
+  images: {
+    unoptimized: true  // Obligatoire pour l'exportation statique
+  }
 };
 
 module.exports = nextConfig;

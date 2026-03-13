@@ -56,9 +56,14 @@ function ConsultationForm() {
     try {
       const jwt = await getToken();
       if (!jwt) return;
-      await fetchEventSource('/api', {
+      
+      // MODIFICATION DAY 5 : Appel vers /api/consultation (conforme au guide page 14)
+      await fetchEventSource('/api/consultation', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${jwt}` },
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${jwt}` 
+        },
         body: JSON.stringify({
           patient_name: patientName,
           date_of_visit: visitDate?.toISOString().slice(0, 10),
@@ -106,13 +111,9 @@ function ConsultationForm() {
             <ReactMarkdown 
               remarkPlugins={[remarkGfm]}
               components={{
-                // Titres de section en bleu
                 h3: ({...props}) => <h3 className="text-2xl font-bold text-blue-600 border-b pb-2 mb-6 mt-8" {...props} />,
-                
-                // FIX FINAL : On traite ol et li comme des div pour empêcher le saut de ligne forcé
                 ol: ({children}) => <div className="space-y-2 mb-4 mt-2">{children}</div>,
                 li: ({children}) => <div className="text-gray-800 text-lg leading-relaxed">{children}</div>,
-                
                 p: ({...props}) => <p className="text-gray-800 leading-relaxed mb-4 text-lg" {...props} />,
                 strong: ({...props}) => <strong className="text-gray-900 font-bold" {...props} />,
               }}
