@@ -60,4 +60,13 @@ async def generate_summary(visit: Visit, request: Request):
         except Exception as e:
             yield f"data: Error: {str(e)}\n\n"
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(), 
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # INDISPENSABLE pour Vercel
+            "Content-Type": "text/event-stream",
+        }
+    )
